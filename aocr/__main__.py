@@ -157,10 +157,26 @@ def process_args(args, defaults):
     parser_train.add_argument('--no-resume', dest='load_model', action='store_false',
                               help=('create a new model even if checkpoints already exist'))
 
+    # Speed Test 
+    parser_speed_test = subparsers.add_parser('speed_test', parents=[parser_base, parser_model],
+                                         help='Speed test the model in batches.')
+    parser_speed_test.set_defaults(phase='speed_test', steps_per_checkpoint=0)
+    parser_speed_test.add_argument('dataset_path', metavar='dataset',
+                             type=str, default=defaults.DATA_PATH,
+                             help=('Testing dataset in the TFRecords format'
+                                   ', default=%s'
+                                   % (defaults.DATA_PATH)))
+    parser_speed_test.add_argument('--batch-size', dest="batch_size",
+                              type=int, default=defaults.BATCH_SIZE,
+                              metavar=defaults.BATCH_SIZE,
+                              help=('batch size (default: %s)'
+                                    % (defaults.BATCH_SIZE)))
+ 
     # Testing
     parser_test = subparsers.add_parser('test', parents=[parser_base, parser_model],
                                         help='Test the saved model.')
-    parser_test.set_defaults(phase='test', steps_per_checkpoint=0, batch_size=1,
+    #parser_test.set_defaults(phase='test', steps_per_checkpoint=0, batch_size=1,
+    parser_test.set_defaults(phase='test', steps_per_checkpoint=0,
                              max_width=defaults.MAX_WIDTH, max_height=defaults.MAX_HEIGHT,
                              max_prediction=defaults.MAX_PREDICTION, full_ascii=defaults.FULL_ASCII)
     parser_test.add_argument('dataset_path', metavar='dataset',
@@ -170,7 +186,12 @@ def process_args(args, defaults):
                                    % (defaults.DATA_PATH)))
     parser_test.add_argument('--visualize', dest='visualize', action='store_true',
                              help=('visualize attentions'))
-
+    parser_test.add_argument('--batch-size', dest="batch_size",
+                             type=int, default=defaults.BATCH_SIZE,
+                             metavar=defaults.BATCH_SIZE,
+                             help=('batch size (default: %s)'
+                                   % (defaults.BATCH_SIZE)))
+ 
     # Exporting
     parser_export = subparsers.add_parser('export', parents=[parser_base, parser_model],
                                           help='Export the model with weights for production use.')
@@ -212,8 +233,13 @@ def main(args=None):
     console.setFormatter(formatter)
     logging.getLogger('').addHandler(console)
 
-    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+#    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
+    print("Starting the Session")
+#    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)) as sess:
 
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, device_count = {'GPU': 0}, intra_op_parallelism_threads=4, inter_op_parallelism_threads=4)) as sess:
+
+        print("Started the Session")
         if parameters.phase == 'dataset':
             dataset.generate(
                 parameters.annotations_path,
@@ -252,14 +278,22 @@ def main(args=None):
         )
 
         if parameters.phase == 'train':
+            print("Start here")
             model.train(
                 data_path=parameters.dataset_path,
                 num_epoch=parameters.num_epoch
             )
+            print("end here")
         elif parameters.phase == 'test':
             model.test(
                 data_path=parameters.dataset_path
             )
+        elif parameters.phase == 'speed_test':
+            print("Start here")
+            model.speed_test(
+                data_path=parameters.dataset_path
+            )
+            print("end here")
         elif parameters.phase == 'predict':
             for line in sys.stdin:
                 filename = line.rstrip()
@@ -280,4 +314,5 @@ def main(args=None):
 
 
 if __name__ == "__main__":
-    main()
+    main(["predict"])
+    #main()

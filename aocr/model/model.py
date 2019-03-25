@@ -12,13 +12,13 @@ import sys
 import distance
 import numpy as np
 import tensorflow as tf
+import time
 
 from six.moves import xrange  # pylint: disable=redefined-builtin
 from .cnn import CNN
 from .seq2seq_model import Seq2SeqModel
 from ..util.data_gen import DataGen
 from ..util.visualizations import visualize_attention
-
 
 class Model(object):
     def __init__(self,
@@ -43,7 +43,8 @@ class Model(object):
                  max_image_height=60,
                  max_prediction_length=8,
                  channels=1,
-                 reg_val=0):
+                 reg_val=0,
+                 test_numbers_only=1):
 
         self.use_distance = use_distance
 
@@ -258,7 +259,7 @@ class Model(object):
                         )
                     )
 
-        self.saver_all = tf.train.Saver(tf.all_variables())
+        self.saver_all = tf.train.Saver(tf.all_variables(), max_to_keep=15, keep_checkpoint_every_n_hours=2)
         self.checkpoint_path = os.path.join(self.model_dir, "model.ckpt")
 
         ckpt = tf.train.get_checkpoint_state(model_dir)
@@ -280,7 +281,7 @@ class Model(object):
         text = outputs[0]
         probability = outputs[1]
         if sys.version_info >= (3,):
-            text = text.decode('iso-8859-1')
+            text = text.decode('utf-8')
 
         return (text, probability)
 
@@ -288,9 +289,12 @@ class Model(object):
         current_step = 0
         num_correct = 0.0
         num_total = 0.0
+        string_correct = 0
+        ts = time.localtime()
+        timestamp = time.strftime("%Y%m%d%H%M%S", ts)	
 
         s_gen = DataGen(data_path, self.buckets, epochs=1, max_width=self.max_original_width)
-        for batch in s_gen.gen(1):
+        for batch in s_gen.gen(self.batch_size):
             current_step += 1
             # Get a batch (one image) and make a step.
             start_time = time.time()
@@ -299,13 +303,23 @@ class Model(object):
 
             num_total += 1
 
+            numbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+
             output = result['prediction']
             ground = batch['labels'][0]
             comment = batch['comments'][0]
             if sys.version_info >= (3,):
-                output = output.decode('iso-8859-1')
-                ground = ground.decode('iso-8859-1')
-                comment = comment.decode('iso-8859-1')
+                output = output.decode('utf-8')
+                ground = ground.decode('utf-8')
+                comment = comment.decode('utf-8')
+            test_numbers_only=0
+            if test_numbers_only is 1:
+                output = ''.join([i for i in output if i in numbers]) #remove everything except numbers
+                ground = ''.join([i for i in ground if i in numbers]) #remove everything except numbers
+            output = output.replace('O','0')
+            output = output.replace('l','1')
+            output = output.replace('G','0')
+            output = output.replace('Q','0')
 
             probability = result['probability']
 
@@ -321,6 +335,11 @@ class Model(object):
                 incorrect = min(1, incorrect)
             else:
                 incorrect = 0 if output == ground else 1
+            
+            if incorrect == 0:
+                string_correct += 1
+            
+            string_accuracy = string_correct / current_step
 
             num_correct += 1. - incorrect
 
@@ -341,7 +360,7 @@ class Model(object):
                                     normalize=normalize,
                                     binarize=binarize,
                                     ground=ground,
-                                    flag=None)
+                                    flag=incorrect)
 
             step_accuracy = "{:>4.0%}".format(1. - incorrect)
             if incorrect:
@@ -350,15 +369,82 @@ class Model(object):
                 correctness = step_accuracy + " (" + ground + ")"
 
             logging.info('Step {:.0f} ({:.3f}s). '
-                         'Accuracy: {:6.2%}, '
+                         'Char Acc: {:6.2%}, String Acc: {:6.2%},'
                          'loss: {:f}, perplexity: {:0<7.6}, probability: {:6.2%} {}'.format(
                              current_step,
                              curr_step_time,
                              num_correct / num_total,
+                             string_accuracy,
                              result['loss'],
                              math.exp(result['loss']) if result['loss'] < 300 else float('inf'),
                              probability,
                              correctness))
+
+    def speed_test(self, data_path):
+        print("Data path is: ", data_path)
+        num_epoch = 1
+        s_gen = DataGen(
+            data_path, self.buckets,
+            epochs=num_epoch, max_width=self.max_original_width
+        )
+        current_step = 0
+        skipped_counter = 0
+
+        logging.info('Starting the speed testing process.')
+        for batch in s_gen.gen(self.batch_size):
+
+            current_step += 1
+            string_correct = 0
+            num_correct = 0
+            start_time = time.time()
+            result = None
+            try:
+                result = self.step(batch, self.forward_only)
+            except Exception as e:
+                skipped_counter += 1
+                logging.info("Step {} failed, batch skipped." +
+                             " Total skipped: {}".format(current_step, skipped_counter))
+                logging.error(
+                    "Step {} failed. Exception details: {}".format(current_step, str(e)))
+                continue
+            for sample in zip(result['prediction'], batch['labels']):
+                if sys.version_info>= (3,):
+                    output = sample[0].decode('utf-8')
+                    ground = sample[1].decode('utf-8')
+                #print("Ground: (", ground, "), Output: (", output, ")")  
+            if self.use_distance:
+               incorrect = distance.levenshtein(output, ground)
+               if not ground:
+                   if not output:
+                       incorrect = 0
+                   else:
+                       incorrect = 1
+               else:
+                   incorrect = float(incorrect) / len(ground)
+               incorrect = min(1, incorrect)
+            else:
+                incorrect = 0 if output == ground else 1
+            
+            if incorrect == 0:
+                string_correct += 1
+            
+            string_accuracy = string_correct / len(batch) 
+            print(string_correct)
+
+            num_correct += 1. - incorrect
+
+
+            curr_step_time = (time.time() - start_time)
+
+            logging.info('Step %i: %.3fs; String accuracy: %.2f',
+                         current_step, curr_step_time, string_accuracy * 100)
+
+
+        if skipped_counter:
+            logging.info("Skipped {} batches due to errors.".format(skipped_counter))
+
+        logging.info("Finishing the speed test ")
+
 
     def train(self, data_path, num_epoch):
         logging.info('num_epoch: %d', num_epoch)

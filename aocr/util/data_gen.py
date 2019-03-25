@@ -17,10 +17,12 @@ except AttributeError:
 
 
 class DataGen(object):
+    fo = open('/home/robertson_y/Playground/_OCR-Tokushima-Project/attention-ocr/all_charlist.txt','r')
+    charlist = fo.read().split('\n')
     GO_ID = 1
     EOS_ID = 2
     IMAGE_HEIGHT = 32
-    CHARMAP = ['', '', ''] + list('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    CHARMAP = ['', '', ''] + charlist 
 
     @staticmethod
     def set_full_ascii_charmap():
@@ -60,7 +62,8 @@ class DataGen(object):
         iterator = dataset.make_one_shot_iterator()
 
         images, labels, comments = iterator.get_next()
-        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
+        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, device_count = {'GPU': 0}, intra_op_parallelism_threads=4, inter_op_parallelism_threads=4)) as sess:
+#        with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
 
             while True:
                 try:
@@ -84,7 +87,7 @@ class DataGen(object):
 
     def convert_lex(self, lex):
         if sys.version_info >= (3,):
-            lex = lex.decode('iso-8859-1')
+            lex = lex.decode('utf-8')
 
         assert len(lex) < self.bucket_specs[-1][1]
 

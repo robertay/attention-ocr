@@ -44,20 +44,19 @@ def visualize_attention(filename, output_dir, attentions, pred, pad_width,
 
     """
     if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    if flag is None:
-        filestring = 'predict-{}'.format(str(pred))
-        idx = 2
-        while filestring in os.listdir(output_dir):
-            filestring = 'predict-{}-{}'.format(str(pred), idx)
-            idx += 1
-        out_dir = output_dir
-    elif flag:
-        filestring = os.path.splitext(os.path.basename(filename))[0]
-        out_dir = os.path.join(output_dir, 'incorrect')
+        os.makedirs(os.path.join(output_dir, 'incorrect'))
+        os.makedirs(os.path.join(output_dir, 'correct'))
+    out_dir = output_dir
+    if flag:
+        out_dir = os.path.join(out_dir, 'incorrect')
     else:
-        filestring = os.path.splitext(os.path.basename(filename))[0]
-        out_dir = os.path.join(output_dir, 'correct')
+        out_dir = os.path.join(out_dir, 'correct')
+ 
+    filestring = 'predict-{}'.format(str(pred))
+    idx = 2
+    while filestring in os.listdir(out_dir):
+        filestring = 'predict-{}-{}'.format(str(pred), idx)
+        idx += 1
     out_dir = os.path.join(out_dir, filestring.replace('/', '_'))
 
     if not os.path.exists(out_dir):
@@ -98,6 +97,8 @@ def visualize_attention(filename, output_dir, attentions, pred, pad_width,
 
         img_out_frames[0].save(output_animation, format='gif', save_all=True, loop=999,
                                duration=500, append_images=img_out_frames[1:])
+        # Save original image for reference.
+        img.save(os.path.join(out_dir, 'original.png'))
 
         if isinstance(filename, str):
             img_file.close()
@@ -168,3 +169,19 @@ def map_attentions(img_data, attentions, pred, pad_width, pad_height,
         img_out_agg += attention
 
     return img_out_frames, img_out_agg
+
+
+
+#    if flag is None:
+#        filestring = 'predict-{}'.format(str(pred))
+#        idx = 2
+#        while filestring in os.listdir(output_dir):
+#            filestring = 'predict-{}-{}'.format(str(pred), idx)
+#            idx += 1
+#        out_dir = output_dir
+#    elif flag:
+#        filestring = os.path.splitext(os.path.basename(filename))[0]
+#        out_dir = os.path.join(output_dir, 'incorrect')
+#    else:
+#        filestring = os.path.splitext(os.path.basename(filename))[0]
+#        out_dir = os.path.join(output_dir, 'correct')
