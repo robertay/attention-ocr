@@ -4,6 +4,10 @@ checkpoints/
 models/
 results/
 
+#pipenv files
+Pipfile
+Pipfile.lock
+
 ### Python template
 # Byte-compiled / optimized / DLL files
 __pycache__/
