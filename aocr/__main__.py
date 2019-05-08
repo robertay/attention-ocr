@@ -236,8 +236,9 @@ def main(args=None):
 #    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
     print("Starting the Session")
 #    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=gpu_options)) as sess:
+    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
 
-    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, device_count = {'GPU': 0}, intra_op_parallelism_threads=4, inter_op_parallelism_threads=4)) as sess:
+#    with tf.Session(config=tf.ConfigProto(allow_soft_placement=True, device_count = {'GPU': 0}, intra_op_parallelism_threads=4, inter_op_parallelism_threads=4)) as sess:
 
         print("Started the Session")
         if parameters.phase == 'dataset':
@@ -314,5 +315,4 @@ def main(args=None):
 
 
 if __name__ == "__main__":
-    main(["predict"])
-    #main()
+    main()
